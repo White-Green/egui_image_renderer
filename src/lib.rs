@@ -1,12 +1,12 @@
-use std::future::Future;
-use std::io::{Seek, Write};
 use egui::Context;
-use egui_wgpu::{wgpu::*, Renderer};
 use egui_wgpu::renderer::ScreenDescriptor;
+use egui_wgpu::{wgpu::*, Renderer};
 use futures::FutureExt;
 use image::{ImageError, RgbaImage};
-use tokio::sync::oneshot;
+use std::future::Future;
+use std::io::{Seek, Write};
 use thiserror::Error;
+use tokio::sync::oneshot;
 
 #[derive(Debug, Error)]
 pub enum EguiImageRendererError {
@@ -35,16 +35,22 @@ impl EguiRenderContext {
             .await
             .ok_or(EguiImageRendererError::AdapterNotFound)?;
 
-        let (device, queue) = adapter
-            .request_device(&Default::default(), None)
-            .await?;
+        let (device, queue) = adapter.request_device(&Default::default(), None).await?;
 
         Ok(EguiRenderContext { device, queue })
     }
 
-    fn render_into_texture_and_buffer(&self, ui: impl FnOnce(&Context), texture: &Texture, buffer: &Buffer) -> impl Future<Output=()> + Send {
+    fn render_into_texture_and_buffer(
+        &self,
+        ui: impl FnOnce(&Context),
+        texture: &Texture,
+        buffer: &Buffer,
+    ) -> impl Future<Output = ()> + Send {
         assert_eq!(texture.format(), TextureFormat::Rgba8Unorm);
-        assert_eq!(buffer.size(), texture.width() as u64 * texture.height() as u64 * 4);
+        assert_eq!(
+            buffer.size(),
+            texture.width() as u64 * texture.height() as u64 * 4
+        );
         let ctx = Context::default();
         let EguiRenderContext { device, queue } = self;
         let mut renderer = Renderer::new(&device, TextureFormat::Rgba8Unorm, None, 1);
@@ -60,13 +66,7 @@ impl EguiRenderContext {
             size_in_pixels: [texture.width(), texture.height()],
             pixels_per_point: output.pixels_per_point,
         };
-        renderer.update_buffers(
-            device,
-            queue,
-            &mut encoder,
-            &primitives,
-            &screen_descriptor,
-        );
+        renderer.update_buffers(device, queue, &mut encoder, &primitives, &screen_descriptor);
         let texture_view = texture.create_view(&Default::default());
         let color_attachments = &[Some(RenderPassColorAttachment {
             view: &texture_view,
@@ -91,11 +91,15 @@ impl EguiRenderContext {
                 rows_per_image: None,
             },
         };
-        encoder.copy_texture_to_buffer(texture.as_image_copy(), buffer_dst, Extent3d {
-            width: texture.width(),
-            height: texture.height(),
-            depth_or_array_layers: 1,
-        });
+        encoder.copy_texture_to_buffer(
+            texture.as_image_copy(),
+            buffer_dst,
+            Extent3d {
+                width: texture.width(),
+                height: texture.height(),
+                depth_or_array_layers: 1,
+            },
+        );
 
         let (sender, receiver) = oneshot::channel();
         queue.on_submitted_work_done(|| sender.send(()).unwrap());
@@ -138,12 +142,23 @@ pub enum FileFormat {
     JPEG,
 }
 
-static EGUI_RENDER_CONTEXT: tokio::sync::OnceCell<EguiRenderContext> = tokio::sync::OnceCell::const_new();
+static EGUI_RENDER_CONTEXT: tokio::sync::OnceCell<EguiRenderContext> =
+    tokio::sync::OnceCell::const_new();
 
-pub async fn render_into_file(ui: impl FnOnce(&Context), width: u32, height: u32, format: FileFormat, mut out: impl Write + Seek) -> Result<(), EguiImageRendererError> {
-    let context = EGUI_RENDER_CONTEXT.get_or_try_init(EguiRenderContext::new).await?;
+pub async fn render_into_file(
+    ui: impl FnOnce(&Context),
+    width: u32,
+    height: u32,
+    format: FileFormat,
+    mut out: impl Write + Seek,
+) -> Result<(), EguiImageRendererError> {
+    let context = EGUI_RENDER_CONTEXT
+        .get_or_try_init(EguiRenderContext::new)
+        .await?;
     let (texture, buffer) = context.create_texture_and_buffer(width, height);
-    context.render_into_texture_and_buffer(ui, &texture, &buffer).await;
+    context
+        .render_into_texture_and_buffer(ui, &texture, &buffer)
+        .await;
 
     let bslice = buffer.slice(..);
     let (tx, rx) = oneshot::channel();
@@ -153,13 +168,20 @@ pub async fn render_into_file(ui: impl FnOnce(&Context), width: u32, height: u32
     let data = bslice.get_mapped_range();
 
     let mut img = RgbaImage::new(width, height);
-    for (img, data) in img.chunks_mut(width as usize * 4).zip(data.chunks(ceil_256(width as u64 * 4) as usize)) {
+    for (img, data) in img
+        .chunks_mut(width as usize * 4)
+        .zip(data.chunks(ceil_256(width as u64 * 4) as usize))
+    {
         assert!(img.len() <= data.len());
         img.copy_from_slice(&data[..img.len()]);
     }
     img.copy_from_slice(&data);
-    img.write_to(&mut out, match format {
-        FileFormat::PNG => image::ImageOutputFormat::Png,
-        FileFormat::JPEG => image::ImageOutputFormat::Jpeg(90),
-    }).map_err(Into::into)
+    img.write_to(
+        &mut out,
+        match format {
+            FileFormat::PNG => image::ImageOutputFormat::Png,
+            FileFormat::JPEG => image::ImageOutputFormat::Jpeg(90),
+        },
+    )
+    .map_err(Into::into)
 }
