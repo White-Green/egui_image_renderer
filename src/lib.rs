@@ -47,7 +47,7 @@ impl EguiRenderContext {
         assert_eq!(buffer.size(), texture.width() as u64 * texture.height() as u64 * 4);
         let ctx = Context::default();
         let EguiRenderContext { device, queue } = self;
-        let mut renderer = Renderer::new(&device, TextureFormat::Rgba8Unorm, None, 4);
+        let mut renderer = Renderer::new(&device, TextureFormat::Rgba8Unorm, None, 1);
 
         let output = ctx.run(Default::default(), ui);
         for (id, delta) in output.textures_delta.set {
