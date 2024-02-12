@@ -1,4 +1,4 @@
-use egui::Context;
+use egui::{Context, Pos2, RawInput, Rect};
 use egui_wgpu::renderer::ScreenDescriptor;
 use egui_wgpu::{wgpu::*, Renderer};
 use futures::FutureExt;
@@ -55,7 +55,16 @@ impl EguiRenderContext {
         let EguiRenderContext { device, queue } = self;
         let mut renderer = Renderer::new(&device, TextureFormat::Rgba8Unorm, None, 1);
 
-        let output = ctx.run(Default::default(), ui);
+        let output = ctx.run(
+            RawInput {
+                screen_rect: Some(Rect {
+                    min: Pos2::ZERO,
+                    max: Pos2::new(texture.width() as f32, texture.height() as f32),
+                }),
+                ..Default::default()
+            },
+            ui,
+        );
         for (id, delta) in output.textures_delta.set {
             renderer.update_texture(&device, &queue, id, &delta);
         }
