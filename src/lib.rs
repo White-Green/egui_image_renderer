@@ -188,8 +188,8 @@ pub async fn render_into_file(
     img.write_to(
         &mut out,
         match format {
-            FileFormat::PNG => image::ImageOutputFormat::Png,
-            FileFormat::JPEG => image::ImageOutputFormat::Jpeg(90),
+            FileFormat::PNG => image::ImageFormat::Png,
+            FileFormat::JPEG => image::ImageFormat::Jpeg,
         },
     )
     .map_err(Into::into)
