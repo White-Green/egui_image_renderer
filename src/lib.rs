@@ -1,5 +1,5 @@
 use egui::{Context, Pos2, RawInput, Rect};
-use egui_wgpu::renderer::ScreenDescriptor;
+use egui_wgpu::ScreenDescriptor;
 use egui_wgpu::{wgpu::*, Renderer};
 use futures::FutureExt;
 use image::{ImageError, RgbaImage};
