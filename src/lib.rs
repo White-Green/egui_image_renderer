@@ -25,7 +25,7 @@ struct EguiRenderContext {
 
 impl EguiRenderContext {
     async fn new() -> Result<EguiRenderContext, EguiImageRendererError> {
-        let instance = Instance::new(InstanceDescriptor {
+        let instance = Instance::new(&InstanceDescriptor {
             backends: Backends::PRIMARY,
             ..Default::default()
         });
@@ -42,7 +42,7 @@ impl EguiRenderContext {
 
     fn render_into_texture_and_buffer(
         &self,
-        ui: impl FnOnce(&Context),
+        ui: impl FnMut(&Context),
         texture: &Texture,
         buffer: &Buffer,
     ) -> impl Future<Output = ()> + Send {
@@ -53,7 +53,7 @@ impl EguiRenderContext {
         );
         let ctx = Context::default();
         let EguiRenderContext { device, queue } = self;
-        let mut renderer = Renderer::new(&device, TextureFormat::Rgba8Unorm, None, 1);
+        let mut renderer = Renderer::new(&device, TextureFormat::Rgba8Unorm, None, 1, false);
 
         let output = ctx.run(
             RawInput {
@@ -83,18 +83,19 @@ impl EguiRenderContext {
             ops: Default::default(),
         })];
         {
-            let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
+            let rpass = encoder.begin_render_pass(&RenderPassDescriptor {
                 color_attachments,
                 ..Default::default()
             });
+            let mut rpass = rpass.forget_lifetime();
             renderer.render(&mut rpass, &primitives, &screen_descriptor);
         }
 
         buffer.unmap();
         let bytes_per_row = ceil_256(texture.width() as u64 * 4);
-        let buffer_dst = ImageCopyBuffer {
+        let buffer_dst = TexelCopyBufferInfo {
             buffer: &buffer,
-            layout: ImageDataLayout {
+            layout: TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(bytes_per_row as u32),
                 rows_per_image: None,
@@ -155,7 +156,7 @@ static EGUI_RENDER_CONTEXT: tokio::sync::OnceCell<EguiRenderContext> =
     tokio::sync::OnceCell::const_new();
 
 pub async fn render_into_file(
-    ui: impl FnOnce(&Context),
+    ui: impl FnMut(&Context),
     width: u32,
     height: u32,
     format: FileFormat,
